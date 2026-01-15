@@ -1,11 +1,4 @@
-import {
-    AppBar,
-    Box,
-    IconButton,
-    TextField,
-    Toolbar,
-    Typography,
-} from "@mui/material";
+import { AppBar, Box, IconButton, TextField, Toolbar, Typography } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import MenuIcon from "@mui/icons-material/Menu";
 import { useEffect, useRef, useState } from "react";
@@ -74,12 +67,7 @@ export default function SearchBar({
 
                 <Typography
                     variant="h6"
-                    sx={{
-                        whiteSpace: "nowrap",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        userSelect: "none",
-                    }}
+                    sx={{ whiteSpace: "nowrap", fontWeight: 700, cursor: "pointer", userSelect: "none" }}
                     onClick={onHomeClick}
                 >
                     MiniTube
@@ -101,8 +89,8 @@ export default function SearchBar({
                             borderColor: "primary.main",
                             boxShadow: "0 0 0 3px rgba(25, 118, 210, 0.15)",
                         },
-                        marginLeft: { xs: 0, md: "auto" },
-                        marginRight: { xs: 0, md: "auto" },
+                        ml: { xs: 0, md: "auto" },
+                        mr: { xs: 0, md: "auto" },
                     }}
                 >
                     <TextField
@@ -116,7 +104,7 @@ export default function SearchBar({
                         variant="standard"
                         InputProps={{
                             disableUnderline: true,
-                            sx: { px: 1, py: 0.8 },
+                            sx: { px: 1, py: { xs: 0.6, sm: 0.8 } },
                         }}
                         sx={{ flex: 1, minWidth: 0 }}
                     />
@@ -125,7 +113,6 @@ export default function SearchBar({
                         <SearchIcon />
                     </IconButton>
                 </Box>
-
             </Toolbar>
 
             {error ? (

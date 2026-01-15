@@ -5,7 +5,7 @@ const youtube = axios.create({
 });
 
 export async function searchVideos(query, maxResults = 12) {
-  const apiKey = import.meta.env.YT_API_KEY;
+  const apiKey = import.meta.env.VITE_YT_API_KEY;
 
   if (!apiKey) {
     throw new Error("Missing YT_API_KEY in .env");

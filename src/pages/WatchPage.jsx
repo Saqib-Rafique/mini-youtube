@@ -1,28 +1,23 @@
-import { Box, Drawer, List, ListItemButton, ListItemIcon, ListItemText, useMediaQuery } from "@mui/material";
+import { Box, useMediaQuery } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import SearchBar from "../components/SearchBar";
+import Sidebar from "../components/Sidebar";
 import VideoPlayer from "../components/VideoPlayer";
 import VideoList from "../components/VideoList";
 import Loader from "../components/Loader";
+import ErrorBanner from "../components/ErrorBanner";
+import PageContainer from "../components/PageContainer";
 
-import { searchVideos } from "../api/youtube";
 import { useVideo } from "../context/useVideo";
-import styles from "../styles/layout.module.css";
+import { useVideoSearch } from "../hooks/useVideoSearch";
+import { DRAWER_WIDTH } from "../constants/layout";
 
-import HomeIcon from "@mui/icons-material/Home";
-import WhatshotIcon from "@mui/icons-material/Whatshot";
-import SubscriptionsIcon from "@mui/icons-material/Subscriptions";
-import VideoLibraryIcon from "@mui/icons-material/VideoLibrary";
-
-const SIDEBAR_ITEMS = [
-    { label: "Home", icon: <HomeIcon />, path: "/" },
-    { label: "Trending", icon: <WhatshotIcon />, path: "/?tab=trending" },
-    { label: "Subscriptions", icon: <SubscriptionsIcon />, path: "/?tab=subscriptions" },
-    { label: "Library", icon: <VideoLibraryIcon />, path: "/?tab=library" },
-];
+function getVideoId(v) {
+    return v?.id?.videoId ?? v?.id ?? "";
+}
 
 export default function WatchPage() {
     const { videoId } = useParams();
@@ -30,97 +25,74 @@ export default function WatchPage() {
 
     const theme = useTheme();
     const isDesktop = useMediaQuery(theme.breakpoints.up("md"));
-    const drawerWidth = 220;
 
     const { state, dispatch } = useVideo();
-    const { videos, selectedVideo, loading, error } = state;
+    const { videos = [], selectedVideo, loading, error, query } = state;
+
+    const { runSearch } = useVideoSearch(dispatch);
 
     const [sidebarOpen, setSidebarOpen] = useState(true);
 
-    // Desktop open, mobile closed
     useEffect(() => {
         setSidebarOpen(isDesktop);
     }, [isDesktop]);
 
-    const toggleSidebar = () => setSidebarOpen((s) => !s);
+    // Normalize current list
+    const safeVideos = useMemo(() => videos.filter(Boolean), [videos]);
 
-    const runSearch = useCallback(
-        async (query) => {
-            dispatch({ type: "SEARCH_START", payload: { query } });
-            try {
-                const items = await searchVideos(query);
-                dispatch({ type: "SEARCH_SUCCESS", payload: { videos: items } });
-            } catch (e) {
-                dispatch({
-                    type: "SEARCH_ERROR",
-                    payload: { error: e?.message || "Search failed" },
-                });
-            }
-        },
-        [dispatch]
-    );
-
-    // Load fallback list if page refreshed
+    /**
+     * 1) If we don't have any videos, fetch using last query or a safe default.
+     */
     useEffect(() => {
-        if (!videos?.length) runSearch("React tutorials");
-    }, [videos?.length, runSearch]);
+        if (safeVideos.length > 0) return;
+        runSearch(query?.trim() ? query : "React tutorials");
+    }, [safeVideos.length, runSearch, query]);
 
-    // Sync selected video from URL
+    /**
+     * 2) Ensure selectedVideo is set correctly for the route videoId.
+     *    - Try to find exact match by id
+     *    - Otherwise fallback to first video (so player always shows something)
+     */
     useEffect(() => {
-        if (!videoId || !videos?.length) return;
-        const found = videos.find((v) => v?.id?.videoId === videoId);
-        if (found) dispatch({ type: "SELECT_VIDEO", payload: { video: found } });
-    }, [videoId, videos, dispatch]);
+        if (safeVideos.length === 0) return;
+
+        const found = videoId
+            ? safeVideos.find((v) => getVideoId(v) === videoId)
+            : null;
+
+        const nextSelected = found ?? safeVideos[0];
+
+        // Prevent unnecessary dispatch loops
+        const currentId = getVideoId(selectedVideo);
+        const nextId = getVideoId(nextSelected);
+
+        if (!currentId || currentId !== nextId) {
+            dispatch({ type: "SELECT_VIDEO", payload: { video: nextSelected } });
+        }
+    }, [videoId, safeVideos, dispatch, selectedVideo]);
+
+    const handleNavigate = (path) => {
+        navigate(path);
+        if (!isDesktop) setSidebarOpen(false);
+    };
 
     return (
         <>
-            {/* Header */}
             <SearchBar
                 onSearch={runSearch}
                 showMenu
-                onToggleSidebar={toggleSidebar}
-                onHomeClick={() => {
-                    navigate("/");
-                    if (!isDesktop) setSidebarOpen(false);
-                }}
+                onToggleSidebar={() => setSidebarOpen((s) => !s)}
+                onHomeClick={() => handleNavigate("/")}
             />
 
             <Box sx={{ display: "flex" }}>
-                {/* Sidebar */}
-                <Drawer
-                    variant={isDesktop ? "persistent" : "temporary"}
+                <Sidebar
                     open={sidebarOpen}
+                    variant={isDesktop ? "persistent" : "temporary"}
                     onClose={() => setSidebarOpen(false)}
-                    ModalProps={{ keepMounted: true }}
-                    sx={{
-                        width: drawerWidth,
-                        flexShrink: 0,
-                        [`& .MuiDrawer-paper`]: {
-                            width: drawerWidth,
-                            boxSizing: "border-box",
-                            pt: 1,
-                            top: { xs: 56, sm: 64 },
-                            height: { xs: "calc(100% - 56px)", sm: "calc(100% - 64px)" },
-                        },
-                    }}
-                >
-                    <List>
-                        {SIDEBAR_ITEMS.map((item) => (
-                            <ListItemButton
-                                key={item.label}
-                                onClick={() => {
-                                    navigate(item.path);
-                                    if (!isDesktop) setSidebarOpen(false);
-                                }}
-                            >
-                                <ListItemIcon>{item.icon}</ListItemIcon>
-                                <ListItemText primary={item.label} />
-                            </ListItemButton>
-                        ))}
-                    </List>
-                </Drawer>
+                    onNavigate={handleNavigate}
+                />
 
-                {/* Main Content */}
                 <Box
                     sx={{
                         flex: 1,
@@ -128,12 +100,12 @@ export default function WatchPage() {
                             easing: theme.transitions.easing.sharp,
                             duration: theme.transitions.duration.shortest,
                         }),
-                        ml: isDesktop && sidebarOpen ? `${drawerWidth}px` : 0,
+                        ml: isDesktop && sidebarOpen ? `${DRAWER_WIDTH}px` : 0,
                     }}
                 >
-                    <div className={styles.container}>
-                        {loading && <Loader label="Fetching videos..." />}
-                        {error && <div style={{ padding: 12, color: "crimson" }}>{error}</div>}
+                    <PageContainer>
+                        {loading ? <Loader label="Fetching videos..." /> : null}
+                        <ErrorBanner message={error} />
 
                         <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start" }}>
                             <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -150,7 +122,7 @@ export default function WatchPage() {
                                 />
                             </Box>
                         </Box>
-                    </div>
+                    </PageContainer>
                 </Box>
             </Box>
         </>
